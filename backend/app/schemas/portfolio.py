@@ -39,6 +39,19 @@ class SectorAllocation(BaseModel):
     diff_pct: float
 
 
+class ProjectionRow(BaseModel):
+    year: int
+    portfolio_value: float
+    annual_dividend: float
+    monthly_income: float
+
+
+class ScenarioProjection(BaseModel):
+    label: str
+    yield_rate: float
+    rows: list[ProjectionRow]
+
+
 class PortfolioSummary(BaseModel):
     total_value: float
     total_cost: float
@@ -50,4 +63,7 @@ class PortfolioSummary(BaseModel):
     years_to_goal: float | None
     war_chest_balance: float
     war_chest_target: float
+    income_goal: float
+    monthly_topup: float
     sector_allocations: list[SectorAllocation]
+    projections: list[ScenarioProjection] = []

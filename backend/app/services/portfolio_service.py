@@ -7,11 +7,12 @@ from app.logic.calculations import (
     projected_annual_dividend,
     projected_monthly_income,
     years_to_income_goal,
+    generate_multi_scenario_projection,
 )
 from app.models.holding import Holding
 from app.models.market_cache import MarketCache
 from app.models.profile import Profile
-from app.schemas.portfolio import HoldingOut, PortfolioSummary, SectorAllocation
+from app.schemas.portfolio import HoldingOut, PortfolioSummary, SectorAllocation, ScenarioProjection, ProjectionRow
 
 
 async def get_holdings_with_market_data(
@@ -108,6 +109,18 @@ async def get_portfolio_summary(
             diff_pct=round(actual_pct - target_pct, 1),
         ))
 
+    raw_projections = generate_multi_scenario_projection(
+        total_value, float(profile.monthly_topup_default), weighted_yield
+    )
+    projections = [
+        ScenarioProjection(
+            label=s["label"],
+            yield_rate=s["yield_rate"],
+            rows=[ProjectionRow(**r) for r in s["rows"]],
+        )
+        for s in raw_projections
+    ]
+
     return PortfolioSummary(
         total_value=round(total_value, 2),
         total_cost=round(total_cost, 2),
@@ -119,5 +132,8 @@ async def get_portfolio_summary(
         years_to_goal=ytg,
         war_chest_balance=float(profile.war_chest_balance),
         war_chest_target=float(profile.war_chest_target),
+        income_goal=float(profile.income_goal),
+        monthly_topup=float(profile.monthly_topup_default),
         sector_allocations=allocations,
+        projections=projections,
     )

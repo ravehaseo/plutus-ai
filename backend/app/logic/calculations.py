@@ -52,3 +52,57 @@ def years_to_income_goal(
             return round(year - 1 + fraction, 1)
 
     return None
+
+
+def generate_projection_table(
+    current_value: float,
+    monthly_topup: float,
+    weighted_yield: float,
+    years: int = 10,
+) -> list[dict]:
+    # Year 0 = starting point (matches the Impact Preview numbers)
+    annual_div_now = projected_annual_dividend(current_value, weighted_yield)
+    rows = [{
+        "year": 0,
+        "portfolio_value": round(current_value, 2),
+        "annual_dividend": round(annual_div_now, 2),
+        "monthly_income": round(projected_monthly_income(annual_div_now), 2),
+    }]
+    for year in range(1, years + 1):
+        fv = snowball_future_value(current_value, monthly_topup, weighted_yield, year)
+        annual_div = projected_annual_dividend(fv, weighted_yield)
+        monthly = projected_monthly_income(annual_div)
+        rows.append({
+            "year": year,
+            "portfolio_value": round(fv, 2),
+            "annual_dividend": round(annual_div, 2),
+            "monthly_income": round(monthly, 2),
+        })
+    return rows
+
+
+def generate_multi_scenario_projection(
+    current_value: float,
+    monthly_topup: float,
+    weighted_yield: float,
+    years: int = 10,
+) -> list[dict]:
+    conservative_rate = 0.04
+    optimistic_rate = 0.07
+    base_rate = max(weighted_yield, 0.01)
+
+    scenarios = [
+        {"label": "Conservative", "yield_rate": conservative_rate},
+        {"label": "Base", "yield_rate": round(base_rate, 4)},
+        {"label": "Optimistic", "yield_rate": optimistic_rate},
+    ]
+
+    result = []
+    for s in scenarios:
+        rows = generate_projection_table(current_value, monthly_topup, s["yield_rate"], years)
+        result.append({
+            "label": s["label"],
+            "yield_rate": s["yield_rate"],
+            "rows": rows,
+        })
+    return result

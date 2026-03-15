@@ -27,7 +27,7 @@ def _fetch_ticker_sync(ticker: str) -> dict:
         return {
             "ticker": ticker,
             "stock_name": info.get("shortName") or info.get("longName") or ticker,
-            "last_close": info.get("previousClose") or info.get("regularMarketPrice"),
+            "last_close": info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose"),
             "week_52_high": info.get("fiftyTwoWeekHigh"),
             "week_52_low": info.get("fiftyTwoWeekLow"),
             "dividend_yield": info.get("dividendYield"),
@@ -98,7 +98,15 @@ async def refresh_watchlist_cache(
             fetched_at=datetime.utcnow(),
         )
         await db.merge(row)
-        cached.append({**result, "sector": sector_map.get(ticker, ""), "cost_per_lot": row.cost_per_lot, "dividend_per_lot": row.dividend_per_lot, "war_fear_discount": row.war_fear_discount, "is_sale_opportunity": row.is_sale_opportunity})
+        cached.append({
+            **result,
+            "sector": sector_map.get(ticker, ""),
+            "cost_per_lot": row.cost_per_lot,
+            "dividend_per_lot": row.dividend_per_lot,
+            "war_fear_discount": row.war_fear_discount,
+            "is_sale_opportunity": row.is_sale_opportunity,
+            "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
+        })
 
     await db.commit()
     return cached
