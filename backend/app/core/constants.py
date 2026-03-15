@@ -1,0 +1,54 @@
+COMPOUNDING_FREQUENCY = 12
+
+DEFAULT_BURSA_PROFILE = {
+    "name": "Bursa Malaysia",
+    "currency": "MYR",
+    "currency_symbol": "RM",
+    "ticker_suffix": ".KL",
+    "lot_size": 100,
+    "yield_band_min": 5.0,
+    "yield_band_max": 8.0,
+    "war_fear_threshold": 10.0,
+    "sector_targets": {"bank": 0.40, "reit": 0.30, "sin_stock": 0.20, "cash": 0.10},
+    "news_grounding_query": "latest Bursa Malaysia news affecting dividend stocks",
+    "rss_feeds": {
+        "the_edge": "https://theedgemalaysia.com/rss",
+        "bursa": "https://www.bursamalaysia.com/rss/announcements",
+    },
+    "monthly_topup_default": 500.00,
+    "income_goal": 2000.00,
+    "war_chest_balance": 7000.00,
+    "war_chest_target": 7000.00,
+}
+
+DEFAULT_KRX_PROFILE = {
+    "name": "KRX Korea",
+    "currency": "KRW",
+    "currency_symbol": "₩",
+    "ticker_suffix": ".KS",
+    "lot_size": 1,
+    "yield_band_min": 3.0,
+    "yield_band_max": 6.0,
+    "war_fear_threshold": 10.0,
+    "sector_targets": {"financials": 0.35, "telecom": 0.25, "industrials": 0.25, "cash": 0.15},
+    "news_grounding_query": "latest KOSPI KRX news affecting dividend stocks Korea",
+    "rss_feeds": {},
+    "monthly_topup_default": 300000.00,
+    "income_goal": 500000.00,
+    "war_chest_balance": 2000000.00,
+    "war_chest_target": 2000000.00,
+}
+
+BURSA_WATCHLIST = [
+    {"ticker": "1155.KL", "stock_name": "Maybank", "sector": "bank"},
+    {"ticker": "1023.KL", "stock_name": "CIMB", "sector": "bank"},
+    {"ticker": "1295.KL", "stock_name": "Public Bank", "sector": "bank"},
+    {"ticker": "1066.KL", "stock_name": "RHB Bank", "sector": "bank"},
+    {"ticker": "5819.KL", "stock_name": "Hong Leong Bank", "sector": "bank"},
+    {"ticker": "5176.KL", "stock_name": "Sunway REIT", "sector": "reit"},
+    {"ticker": "5227.KL", "stock_name": "IGB REIT", "sector": "reit"},
+    {"ticker": "5212.KL", "stock_name": "Pavilion REIT", "sector": "reit"},
+    {"ticker": "3255.KL", "stock_name": "Heineken Malaysia", "sector": "sin_stock"},
+    {"ticker": "2836.KL", "stock_name": "Carlsberg", "sector": "sin_stock"},
+    {"ticker": "4162.KL", "stock_name": "BAT Malaysia", "sector": "sin_stock"},
+]

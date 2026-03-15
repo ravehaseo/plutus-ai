@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: plutus-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: plutus
+      POSTGRES_PASSWORD: plutus
+      POSTGRES_DB: plutus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: plutus-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
