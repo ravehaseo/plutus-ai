@@ -5,6 +5,7 @@ import type { MarketData } from "@/types";
 import { formatCurrency, formatYield } from "@/lib/utils";
 import { SECTOR_LABELS } from "@/lib/constants";
 import { SaleBadge } from "./sale-badge";
+import { EntrySignalBadge } from "./entry-signal-badge";
 
 type SortKey =
   | "stock_name"
@@ -85,6 +86,9 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
             <SortHeader label="Discount" field="war_fear_discount" align="right" />
             <SortHeader label="Cost/Lot" field="cost_per_lot" align="right" />
             <SortHeader label="Div/Lot/Yr" field="dividend_per_lot" align="right" />
+            <th className="px-4 py-3 text-center text-xs uppercase tracking-wide text-plutus-text-secondary">
+              Entry
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -129,6 +133,12 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
               </td>
               <td className="px-4 py-3 text-right font-financial text-plutus-positive">
                 {formatCurrency(item.dividend_per_lot, currencySymbol)}
+              </td>
+              <td className="px-4 py-3 text-center">
+                <EntrySignalBadge
+                  signal={item.entry_signal}
+                  reasoning={item.entry_reasoning}
+                />
               </td>
             </tr>
           ))}

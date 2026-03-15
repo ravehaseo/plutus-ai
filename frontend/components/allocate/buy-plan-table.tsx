@@ -2,7 +2,7 @@
 
 import type { BuyPlanItem } from "@/types";
 import { formatCurrency, formatYield } from "@/lib/utils";
-import { SECTOR_LABELS } from "@/lib/constants";
+import { SECTOR_LABELS, ENTRY_SIGNAL_CONFIG } from "@/lib/constants";
 
 interface BuyPlanTableProps {
   items: BuyPlanItem[];
@@ -36,6 +36,7 @@ export function BuyPlanTable({ items, remainder, currencySymbol }: BuyPlanTableP
               <th className="px-5 py-3 text-right">Lots</th>
               <th className="px-5 py-3 text-right">Cost</th>
               <th className="px-5 py-3 text-right">Yield</th>
+              <th className="px-5 py-3 text-center">Entry</th>
               <th className="px-5 py-3">Reasoning</th>
             </tr>
           </thead>
@@ -64,6 +65,18 @@ export function BuyPlanTable({ items, remainder, currencySymbol }: BuyPlanTableP
                 <td className="px-5 py-3 text-right font-financial text-plutus-positive">
                   {formatYield(item.dividend_yield)}
                 </td>
+                <td className="px-5 py-3 text-center">
+                  {item.entry_signal && ENTRY_SIGNAL_CONFIG[item.entry_signal] ? (
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ENTRY_SIGNAL_CONFIG[item.entry_signal].color} ${ENTRY_SIGNAL_CONFIG[item.entry_signal].bg}`}
+                      title={item.entry_reasoning || undefined}
+                    >
+                      {ENTRY_SIGNAL_CONFIG[item.entry_signal].label}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-plutus-text-secondary">—</span>
+                  )}
+                </td>
                 <td className="px-5 py-3 text-xs text-plutus-text-secondary max-w-xs">
                   {item.reasoning}
                 </td>
@@ -76,7 +89,7 @@ export function BuyPlanTable({ items, remainder, currencySymbol }: BuyPlanTableP
               <td className="px-5 py-3 text-right font-financial font-bold text-plutus-gold">
                 {formatCurrency(totalCost, currencySymbol)}
               </td>
-              <td colSpan={2} className="px-5 py-3 text-right text-sm text-plutus-text-secondary">
+              <td colSpan={3} className="px-5 py-3 text-right text-sm text-plutus-text-secondary">
                 Remainder: {formatCurrency(remainder, currencySymbol)}
               </td>
             </tr>

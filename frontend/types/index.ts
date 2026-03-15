@@ -100,6 +100,8 @@ export interface MarketData {
   dividend_per_lot: number | null;
   war_fear_discount: number | null;
   is_sale_opportunity: boolean;
+  entry_signal: string | null;
+  entry_reasoning: string | null;
   fetched_at: string | null;
 }
 
@@ -113,6 +115,31 @@ export interface BuyPlanItem {
   dividend_yield: number | null;
   dividend_per_lot: number | null;
   reasoning: string;
+  entry_signal: string | null;
+  entry_reasoning: string | null;
+}
+
+export interface WatchlistItem {
+  id: string;
+  ticker: string;
+  stock_name: string;
+  sector: string;
+  is_active: boolean;
+  added_at: string;
+}
+
+export interface DiscoverCandidate {
+  ticker: string;
+  stock_name: string;
+  sector: string;
+  dividend_yield: number | null;
+  reasoning: string;
+  already_in_watchlist: boolean;
+}
+
+export interface DiscoverResponse {
+  candidates: DiscoverCandidate[];
+  summary: string;
 }
 
 export interface ImpactPreview {

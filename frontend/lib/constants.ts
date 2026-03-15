@@ -18,6 +18,17 @@ export const SECTOR_LABELS: Record<string, string> = {
   financials: "Financials",
   telecom: "Telecom",
   industrials: "Industrials",
+  utility: "Utilities",
+  consumer: "Consumer",
+  infrastructure: "Infrastructure",
+  plantation: "Plantation",
+  gaming: "Gaming",
+  insurance: "Insurance",
+  property: "Property",
+  healthcare: "Healthcare",
+  technology: "Technology",
+  energy: "Energy",
+  other: "Other",
 };
 
 export const SECTOR_COLORS: Record<string, string> = {
@@ -28,4 +39,22 @@ export const SECTOR_COLORS: Record<string, string> = {
   financials: "#FFD700",
   telecom: "#34D399",
   industrials: "#A78BFA",
+  utility: "#06B6D4",
+  consumer: "#EC4899",
+  infrastructure: "#8B5CF6",
+  plantation: "#84CC16",
+  gaming: "#F97316",
+  insurance: "#14B8A6",
+  property: "#EAB308",
+  healthcare: "#EF4444",
+  technology: "#3B82F6",
+  energy: "#F59E0B",
+  other: "#6B7280",
+};
+
+export const ENTRY_SIGNAL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  strong_buy: { label: "Strong Buy", color: "text-green-400", bg: "bg-green-500/20" },
+  buy: { label: "Buy", color: "text-emerald-400", bg: "bg-emerald-500/15" },
+  hold: { label: "Hold", color: "text-yellow-400", bg: "bg-yellow-500/15" },
+  wait: { label: "Wait", color: "text-red-400", bg: "bg-red-500/15" },
 };

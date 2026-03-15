@@ -83,4 +83,27 @@ export const api = {
     history: () =>
       request<import("@/types").AllocationHistory[]>("/api/v1/allocate/history"),
   },
+
+  watchlist: {
+    list: () =>
+      request<import("@/types").WatchlistItem[]>("/api/v1/watchlist"),
+    add: (ticker: string) =>
+      request<import("@/types").WatchlistItem>("/api/v1/watchlist", {
+        method: "POST",
+        body: JSON.stringify({ ticker }),
+      }),
+    remove: (id: string) =>
+      request<{ ok: boolean; removed: string }>(`/api/v1/watchlist/${id}`, {
+        method: "DELETE",
+      }),
+    discover: () =>
+      request<import("@/types").DiscoverResponse>("/api/v1/watchlist/discover", {
+        method: "POST",
+      }),
+    addDiscovered: (tickers: string[]) =>
+      request<import("@/types").WatchlistItem[]>("/api/v1/watchlist/discover/add", {
+        method: "POST",
+        body: JSON.stringify({ tickers }),
+      }),
+  },
 };
