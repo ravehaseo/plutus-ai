@@ -1,5 +1,26 @@
 COMPOUNDING_FREQUENCY = 12
 
+KNOWN_SECTORS = {
+    "bank": "Banks",
+    "reit": "REITs",
+    "sin_stock": "Sin Stocks",
+    "utility": "Utilities",
+    "telecom": "Telecom",
+    "consumer": "Consumer",
+    "infrastructure": "Infrastructure",
+    "plantation": "Plantation",
+    "gaming": "Gaming",
+    "insurance": "Insurance",
+    "property": "Property",
+    "healthcare": "Healthcare",
+    "technology": "Technology",
+    "energy": "Energy",
+    "financials": "Financials",
+    "industrials": "Industrials",
+    "cash": "Cash",
+    "other": "Other",
+}
+
 DEFAULT_BURSA_PROFILE = {
     "name": "Bursa Malaysia",
     "currency": "MYR",

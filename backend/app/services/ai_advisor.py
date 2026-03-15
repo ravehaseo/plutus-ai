@@ -86,7 +86,8 @@ When recommending a buy plan:
 2. Prioritize stocks that bring the portfolio closer to the sector targets
 3. Maximize dividend income per {profile.currency_symbol} invested
 4. Stay within the given budget - never exceed it
-5. Return ONLY valid JSON, no markdown, no explanation outside the JSON
+5. Assess entry timing for each recommended stock — rate as "strong_buy", "buy", "hold", or "wait"
+6. Return ONLY valid JSON, no markdown, no explanation outside the JSON
 
 Your tone: supportive, data-driven, direct."""
 
@@ -144,12 +145,20 @@ Respond with ONLY this JSON structure:
       "cost": 1900.00,
       "dividend_yield": 0.062,
       "dividend_per_lot": 58.90,
-      "reasoning": "One sentence explaining why"
+      "reasoning": "One sentence explaining why",
+      "entry_signal": "strong_buy",
+      "entry_reasoning": "Trading 12% below 52-week high with stable 6.2% yield"
     }}
   ],
   "remainder": 100.00,
   "summary": "One paragraph overall reasoning"
-}}"""
+}}
+
+Entry signal must be one of: "strong_buy", "buy", "hold", "wait".
+- strong_buy: Trading significantly below fair value, excellent entry point
+- buy: Good value at current price, reasonable entry
+- hold: Fair value, not urgent to buy
+- wait: Overvalued or better entry likely soon"""
 
 
 async def generate_buy_plan(
@@ -173,12 +182,11 @@ async def generate_buy_plan(
     try:
         from google.genai import types
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=get_settings().gemini_model,
             contents=system_prompt + "\n\n" + user_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3,
                 max_output_tokens=8192,
-                thinking_config=types.ThinkingConfig(thinking_budget=1024),
             ),
         )
         text = _extract_text(response)
@@ -198,6 +206,19 @@ async def generate_buy_plan(
     except Exception as e:
         print(f"[Plutus] Gemini API error: {e}")
         return _generate_fallback_plan(profile, market_data, amount)
+
+
+def _derive_entry_signal(stock: dict) -> tuple[str, str]:
+    """Derive an entry signal from war/fear data when Gemini is unavailable."""
+    discount = stock.get("war_fear_discount") or 0
+    if discount >= 15:
+        return "strong_buy", f"Trading {discount:.1f}% below 52-week high"
+    elif discount >= 10:
+        return "buy", f"Moderate discount of {discount:.1f}% below 52-week high"
+    elif discount >= 5:
+        return "hold", f"Minor discount of {discount:.1f}% below 52-week high"
+    else:
+        return "wait", f"Near 52-week high, only {discount:.1f}% below"
 
 
 def _generate_fallback_plan(profile, market_data: list[dict], amount: float) -> dict:
@@ -221,6 +242,7 @@ def _generate_fallback_plan(profile, market_data: list[dict], amount: float) -> 
             continue
 
         cost = lots * cost_per_lot
+        signal, signal_reason = _derive_entry_signal(stock)
         items.append({
             "ticker": stock["ticker"],
             "stock_name": stock.get("stock_name", ""),
@@ -231,6 +253,8 @@ def _generate_fallback_plan(profile, market_data: list[dict], amount: float) -> 
             "dividend_yield": stock.get("dividend_yield"),
             "dividend_per_lot": stock.get("dividend_per_lot"),
             "reasoning": "Highest yield available (fallback mode - no Gemini API key)",
+            "entry_signal": signal,
+            "entry_reasoning": signal_reason,
         })
         remaining -= cost
 

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://plutus:plutus@localhost:5432/plutus"
     redis_url: str = "redis://localhost:6379/0"
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     alpha_vantage_api_key: str = ""
     market_cache_ttl_minutes: int = 60
 

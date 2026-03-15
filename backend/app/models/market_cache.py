@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, Numeric, DateTime, BigInteger
+from sqlalchemy import String, Boolean, Numeric, DateTime, BigInteger, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -22,4 +22,6 @@ class MarketCache(Base):
     dividend_per_lot: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     war_fear_discount: Mapped[float | None] = mapped_column(Numeric(6, 4), nullable=True)
     is_sale_opportunity: Mapped[bool] = mapped_column(Boolean, default=False)
+    entry_signal: Mapped[str | None] = mapped_column(String, nullable=True)
+    entry_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

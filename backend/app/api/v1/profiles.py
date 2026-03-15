@@ -120,12 +120,11 @@ Respond with ONLY this JSON:
         client = genai.Client(api_key=api_key)
         from google.genai import types
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=get_settings().gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3,
                 max_output_tokens=4096,
-                thinking_config=types.ThinkingConfig(thinking_budget=512),
             ),
         )
 

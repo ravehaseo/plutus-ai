@@ -1,7 +1,9 @@
 """Fetch market data from yfinance and cache in Postgres."""
 
 import asyncio
+import json
 import logging
+import re
 from datetime import datetime, timedelta
 
 import yfinance as yf
@@ -16,6 +18,40 @@ from app.models.watchlist import WatchlistItem
 from app.models.profile import Profile
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_text(response) -> str:
+    try:
+        texts = []
+        for candidate in response.candidates:
+            for part in candidate.content.parts:
+                if hasattr(part, "thought") and part.thought:
+                    continue
+                if hasattr(part, "text") and part.text:
+                    texts.append(part.text)
+        if texts:
+            return "".join(texts).strip()
+    except (AttributeError, IndexError, TypeError):
+        pass
+    try:
+        if response.text:
+            return response.text.strip()
+    except (ValueError, AttributeError):
+        pass
+    return ""
+
+
+def _parse_json(text: str):
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if json_match:
+        text = json_match.group(1).strip()
+    elif text.lstrip().startswith("```"):
+        text = re.sub(r"^[\s]*```(?:json)?\s*", "", text).strip()
+    brace_start = text.find("{")
+    brace_end = text.rfind("}")
+    if brace_start != -1 and brace_end > brace_start:
+        text = text[brace_start : brace_end + 1]
+    return json.loads(text)
 
 
 def _fetch_ticker_sync(ticker: str) -> dict:
@@ -44,6 +80,83 @@ async def fetch_ticker_data(ticker: str) -> dict:
     return await asyncio.to_thread(_fetch_ticker_sync, ticker)
 
 
+async def _generate_entry_signals(stocks_summary: list[dict], profile) -> dict[str, dict]:
+    """Ask Gemini to rate entry timing for a batch of stocks. Returns {ticker: {signal, reasoning}}."""
+    api_key = get_settings().gemini_api_key
+    if not api_key or api_key == "your-gemini-api-key":
+        return {}
+
+    stocks_text = json.dumps(
+        [
+            {
+                "ticker": s["ticker"],
+                "name": s.get("stock_name", ""),
+                "price": s.get("last_close"),
+                "52w_high": s.get("week_52_high"),
+                "52w_low": s.get("week_52_low"),
+                "discount_pct": s.get("war_fear_discount"),
+                "dividend_yield": s.get("dividend_yield"),
+                "pe_ratio": s.get("pe_ratio"),
+            }
+            for s in stocks_summary
+        ],
+        indent=2,
+    )
+
+    prompt = f"""You are an expert stock market analyst for {profile.name}.
+
+Analyze the entry timing for each stock below. Consider:
+- Current price vs 52-week high/low range
+- War/Fear discount percentage (how far below 52-week high)
+- Dividend yield attractiveness
+- P/E ratio reasonableness
+- General market sentiment
+
+For each stock, provide an entry signal and brief reasoning.
+
+Stocks:
+{stocks_text}
+
+Respond with ONLY this JSON:
+{{
+  "signals": {{
+    "TICKER": {{
+      "signal": "strong_buy|buy|hold|wait",
+      "reasoning": "One sentence explanation"
+    }}
+  }}
+}}
+
+Signal definitions:
+- strong_buy: Trading significantly below fair value, excellent entry point
+- buy: Good value at current price, reasonable entry
+- hold: Fair value, not urgent to buy
+- wait: Overvalued or better entry likely soon"""
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=get_settings().gemini_model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=4096,
+            ),
+        )
+        text = _extract_text(response)
+        if not text:
+            return {}
+
+        parsed = _parse_json(text)
+        return parsed.get("signals", {})
+    except Exception as e:
+        print(f"[Plutus] Entry signal generation failed: {e}")
+        return {}
+
+
 async def refresh_watchlist_cache(
     db: AsyncSession,
     profile_id: str,
@@ -68,11 +181,12 @@ async def refresh_watchlist_cache(
     tasks = [fetch_ticker_data(t) for t in tickers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    cached = []
-    for result in results:
-        if isinstance(result, Exception) or "error" in result:
-            continue
+    valid_results = [r for r in results if not isinstance(r, Exception) and "error" not in r]
 
+    entry_signals = await _generate_entry_signals(valid_results, profile)
+
+    cached = []
+    for result in valid_results:
         ticker = result["ticker"]
         price = result.get("last_close") or 0
         high_52 = result.get("week_52_high") or 0
@@ -80,6 +194,8 @@ async def refresh_watchlist_cache(
 
         discount = calculate_discount(price, high_52)
         sale = is_sale_opportunity(discount, float(profile.war_fear_threshold))
+
+        signal_data = entry_signals.get(ticker, {})
 
         row = MarketCache(
             ticker=ticker,
@@ -95,6 +211,8 @@ async def refresh_watchlist_cache(
             dividend_per_lot=round(annual_div * profile.lot_size, 2) if annual_div else 0,
             war_fear_discount=round(discount, 4),
             is_sale_opportunity=sale,
+            entry_signal=signal_data.get("signal"),
+            entry_reasoning=signal_data.get("reasoning"),
             fetched_at=datetime.utcnow(),
         )
         await db.merge(row)
@@ -105,6 +223,8 @@ async def refresh_watchlist_cache(
             "dividend_per_lot": row.dividend_per_lot,
             "war_fear_discount": row.war_fear_discount,
             "is_sale_opportunity": row.is_sale_opportunity,
+            "entry_signal": row.entry_signal,
+            "entry_reasoning": row.entry_reasoning,
             "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
         })
 
@@ -161,6 +281,8 @@ async def get_cached_market_data(
             "dividend_per_lot": float(row.dividend_per_lot) if row.dividend_per_lot else None,
             "war_fear_discount": float(row.war_fear_discount) if row.war_fear_discount else None,
             "is_sale_opportunity": row.is_sale_opportunity,
+            "entry_signal": row.entry_signal,
+            "entry_reasoning": row.entry_reasoning,
             "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
         }
         for row in cache_rows.values()

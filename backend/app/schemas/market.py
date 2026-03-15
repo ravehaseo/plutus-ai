@@ -16,4 +16,6 @@ class MarketDataOut(BaseModel):
     dividend_per_lot: float | None
     war_fear_discount: float | None
     is_sale_opportunity: bool
+    entry_signal: str | None = None
+    entry_reasoning: str | None = None
     fetched_at: str | None = None

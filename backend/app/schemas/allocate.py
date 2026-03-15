@@ -17,6 +17,8 @@ class BuyPlanItem(BaseModel):
     dividend_yield: float | None = None
     dividend_per_lot: float | None = None
     reasoning: str = ""
+    entry_signal: str | None = None
+    entry_reasoning: str | None = None
 
 
 class ImpactPreview(BaseModel):
