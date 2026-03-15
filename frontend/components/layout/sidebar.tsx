@@ -8,8 +8,10 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/allocate", label: "Allocate", icon: "💰" },
   { href: "/compare", label: "Compare", icon: "📋" },
+  { href: "/calculator", label: "Income Goal", icon: "🎯" },
   { href: "/calendar", label: "Calendar", icon: "📅" },
   { href: "/chat", label: "Chat", icon: "💬" },
+  { href: "/profiles", label: "Settings", icon: "⚙️" },
 ];
 
 export function Sidebar() {

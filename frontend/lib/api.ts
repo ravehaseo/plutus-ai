@@ -22,6 +22,15 @@ export const api = {
       request<import("@/types").Profile>(`/api/v1/profiles/${id}/activate`, {
         method: "POST",
       }),
+    update: (data: import("@/types").ProfileUpdate) =>
+      request<import("@/types").Profile>("/api/v1/profiles/active", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    suggestSectors: () =>
+      request<import("@/types").AISuggestResponse>("/api/v1/profiles/active/suggest-sectors", {
+        method: "POST",
+      }),
   },
 
   portfolio: {
@@ -55,5 +64,23 @@ export const api = {
       request<import("@/types").MarketData[]>("/api/v1/market/refresh", {
         method: "POST",
       }),
+  },
+
+  allocate: {
+    generate: (amount: number) =>
+      request<import("@/types").AllocateResponse>("/api/v1/allocate", {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      }),
+    confirm: (id: string, confirmed_items: { ticker: string; lots: number }[]) =>
+      request<{ ok: boolean; total_spent: number; summary: import("@/types").PortfolioSummary }>(
+        `/api/v1/allocate/${id}/confirm`,
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmed_items }),
+        }
+      ),
+    history: () =>
+      request<import("@/types").AllocationHistory[]>("/api/v1/allocate/history"),
   },
 };

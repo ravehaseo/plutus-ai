@@ -6,6 +6,7 @@ import { formatCurrency, formatPct, formatYield } from "@/lib/utils";
 interface StatsRowProps {
   summary: PortfolioSummary;
   currencySymbol: string;
+  saleOpportunityCount?: number;
 }
 
 function StatCard({
@@ -41,11 +42,11 @@ function StatCard({
   );
 }
 
-export function StatsRow({ summary, currencySymbol }: StatsRowProps) {
+export function StatsRow({ summary, currencySymbol, saleOpportunityCount }: StatsRowProps) {
   const pnlAccent = summary.total_pnl >= 0 ? "positive" : "negative";
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <StatCard
         label="Portfolio Value"
         value={formatCurrency(summary.total_value, currencySymbol)}
@@ -70,7 +71,13 @@ export function StatsRow({ summary, currencySymbol }: StatsRowProps) {
             ? `${summary.years_to_goal} yrs`
             : "N/A"
         }
-        subtext={`Target: ${formatCurrency(summary.war_chest_target, currencySymbol)}/mo`}
+        subtext={`Target: ${formatCurrency(summary.income_goal, currencySymbol)}/mo`}
+      />
+      <StatCard
+        label="Sale Opportunities"
+        value={saleOpportunityCount != null ? `${saleOpportunityCount}` : "0"}
+        subtext="Stocks below 52-week threshold"
+        accent={saleOpportunityCount ? "gold" : "default"}
       />
     </div>
   );

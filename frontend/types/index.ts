@@ -18,6 +18,21 @@ export interface Profile {
   is_active: boolean;
 }
 
+export interface ProfileUpdate {
+  sector_targets?: Record<string, number>;
+  yield_band_min?: number;
+  yield_band_max?: number;
+  war_fear_threshold?: number;
+  monthly_topup_default?: number;
+  income_goal?: number;
+  war_chest_target?: number;
+}
+
+export interface AISuggestResponse {
+  suggested_targets: Record<string, number>;
+  reasoning: string;
+}
+
 export interface Holding {
   id: string;
   ticker: string;
@@ -40,6 +55,19 @@ export interface SectorAllocation {
   diff_pct: number;
 }
 
+export interface ProjectionRow {
+  year: number;
+  portfolio_value: number;
+  annual_dividend: number;
+  monthly_income: number;
+}
+
+export interface ScenarioProjection {
+  label: string;
+  yield_rate: number;
+  rows: ProjectionRow[];
+}
+
 export interface PortfolioSummary {
   total_value: number;
   total_cost: number;
@@ -51,7 +79,10 @@ export interface PortfolioSummary {
   years_to_goal: number | null;
   war_chest_balance: number;
   war_chest_target: number;
+  income_goal: number;
+  monthly_topup: number;
   sector_allocations: SectorAllocation[];
+  projections: ScenarioProjection[];
 }
 
 export interface MarketData {
@@ -70,4 +101,53 @@ export interface MarketData {
   war_fear_discount: number | null;
   is_sale_opportunity: boolean;
   fetched_at: string | null;
+}
+
+export interface BuyPlanItem {
+  ticker: string;
+  stock_name: string;
+  sector: string;
+  lots: number;
+  price: number;
+  cost: number;
+  dividend_yield: number | null;
+  dividend_per_lot: number | null;
+  reasoning: string;
+}
+
+export interface ImpactPreview {
+  annual_dividend_before: number;
+  annual_dividend_after: number;
+  monthly_income_before: number;
+  monthly_income_after: number;
+  sector_balance_before: SectorAllocation[];
+  sector_balance_after: SectorAllocation[];
+}
+
+export interface AllocateResponse {
+  id: string;
+  items: BuyPlanItem[];
+  remainder: number;
+  summary: string;
+  impact: ImpactPreview;
+  projections: ScenarioProjection[];
+  is_fallback: boolean;
+}
+
+export interface AllocationHistory {
+  id: string;
+  total_amount: number | null;
+  plan: {
+    items: BuyPlanItem[];
+    remainder: number;
+    summary: string;
+  } | null;
+  projected_annual_dividend_before: number | null;
+  projected_annual_dividend_after: number | null;
+  executed: boolean;
+  executed_items: {
+    confirmed: { ticker: string; lots: number; cost: number }[];
+    total_spent: number;
+  } | null;
+  created_at: string;
 }
