@@ -1,10 +1,14 @@
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AllocateRequest(BaseModel):
     amount: float
+    refresh_market: bool = Field(
+        default=True,
+        description="Fetch latest yfinance prices before planning; plan prices match these quotes.",
+    )
 
 
 class BuyPlanItem(BaseModel):
@@ -56,6 +60,7 @@ class AllocateResponse(BaseModel):
 class ConfirmItemRequest(BaseModel):
     ticker: str
     lots: int
+    price: float | None = None  # optional override: actual buy price (e.g. 0.875)
 
 
 class ConfirmRequest(BaseModel):

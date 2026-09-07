@@ -37,6 +37,11 @@ export const api = {
     list: () => request<import("@/types").Holding[]>("/api/v1/portfolio"),
     summary: () =>
       request<import("@/types").PortfolioSummary>("/api/v1/portfolio/summary"),
+    healthCheck: () =>
+      request<Record<string, { risk_level: string; summary: string }>>(
+        "/api/v1/portfolio/health-check",
+        { method: "POST" }
+      ),
     add: (data: {
       ticker: string;
       stock_name: string;
@@ -67,12 +72,15 @@ export const api = {
   },
 
   allocate: {
-    generate: (amount: number) =>
+    generate: (amount: number, options?: { refresh_market?: boolean }) =>
       request<import("@/types").AllocateResponse>("/api/v1/allocate", {
         method: "POST",
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({
+          amount,
+          refresh_market: options?.refresh_market ?? true,
+        }),
       }),
-    confirm: (id: string, confirmed_items: { ticker: string; lots: number }[]) =>
+    confirm: (id: string, confirmed_items: { ticker: string; lots: number; price?: number }[]) =>
       request<{ ok: boolean; total_spent: number; summary: import("@/types").PortfolioSummary }>(
         `/api/v1/allocate/${id}/confirm`,
         {

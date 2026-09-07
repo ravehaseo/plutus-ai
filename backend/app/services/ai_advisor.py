@@ -47,23 +47,100 @@ def _extract_text(response) -> str:
     return ""
 
 
+def _sanitize_json(text: str) -> str:
+    """Fix common LLM JSON mistakes: trailing commas, missing commas, etc."""
+    # Remove trailing commas before } or ]
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    # Add missing commas between } and { in arrays
+    text = re.sub(r"}\s*{", "},{", text)
+    # Add missing commas between " and " across object boundaries
+    text = re.sub(r'"\s*\n\s*"', '",\n"', text)
+    return text
+
+
+def _close_truncated_json(text: str) -> str:
+    """Close any unclosed brackets/braces in truncated JSON."""
+    brace_start = text.find("{")
+    if brace_start == -1:
+        raise json.JSONDecodeError("No JSON object found", text, 0)
+    text = text[brace_start:]
+
+    # Find the last structurally complete point
+    last_good = -1
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\':
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+        if not in_string and ch in (',', '[', '{', '}', ']'):
+            last_good = i
+
+    if last_good > 0 and last_good < len(text) - 1:
+        text = text[:last_good + 1]
+
+    text = text.rstrip().rstrip(',')
+
+    opens = 0
+    open_brackets = 0
+    in_string = False
+    escape_next = False
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\':
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+        if not in_string:
+            if ch == '{':
+                opens += 1
+            elif ch == '}':
+                opens -= 1
+            elif ch == '[':
+                open_brackets += 1
+            elif ch == ']':
+                open_brackets -= 1
+
+    text += ']' * open_brackets + '}' * opens
+    return text
+
+
 def _parse_json(text: str) -> dict:
-    """Extract JSON from text that may have markdown code fences or be truncated."""
-    # Try to extract from markdown code block
+    """Extract JSON from text, handling markdown fences, LLM quirks, and truncation."""
     json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if json_match:
         text = json_match.group(1).strip()
     elif text.lstrip().startswith("```"):
-        # Truncated: opening ``` but no closing — strip the opening
         text = re.sub(r"^[\s]*```(?:json)?\s*", "", text).strip()
 
-    # Extract from first { to last }
     brace_start = text.find("{")
     brace_end = text.rfind("}")
     if brace_start != -1 and brace_end > brace_start:
         text = text[brace_start:brace_end + 1]
 
-    return json.loads(text)
+    # Try parsing as-is first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try sanitizing common LLM mistakes
+    try:
+        return json.loads(_sanitize_json(text))
+    except json.JSONDecodeError:
+        pass
+
+    # Try closing truncated JSON
+    repaired = _close_truncated_json(_sanitize_json(text))
+    return json.loads(repaired)
 
 
 def _build_system_prompt(profile) -> str:
@@ -72,24 +149,48 @@ def _build_system_prompt(profile) -> str:
         for k, v in profile.sector_targets.items()
     )
 
-    return f"""You are Plutus, a personal AI dividend investment advisor for the {profile.name} stock market.
+    return f"""You are Plutus, a Precision Dividend Investment Advisor for the {profile.name} stock market.
 
-You MUST follow these investment rules:
+Your sole objective is to maximize immediate and long-term dividend income while keeping the portfolio close to its sector targets.
+
+### 1. CORE CONSTRAINTS
 - Target allocation: {sector_lines}
-- Only recommend stocks yielding {float(profile.yield_band_min)}%-{float(profile.yield_band_max)}% annually
-- Flag any stock trading >{float(profile.war_fear_threshold)}% below its 52-week high as a "Sale Opportunity"
-- All purchases must be in whole lots of {profile.lot_size} shares
-- Use {profile.currency} ({profile.currency_symbol}) for all amounts
+- Yield filter: Only recommend stocks yielding {float(profile.yield_band_min)}% to {float(profile.yield_band_max)}% annually.
+- Purchase logic: Calculations must strictly use whole lots of {profile.lot_size} shares.
+- Currency: Use {profile.currency} ({profile.currency_symbol}) for all amounts.
+ - Concentration limit: Do not allocate more than 40% of the total budget to a single sector unless the sector target explicitly requires it (e.g. that sector already has >= 40% target).
 
-When recommending a buy plan:
-1. Compare all watchlist stocks by: dividend yield, cost per lot, dividend per lot per year, and War/Fear discount
-2. Prioritize stocks that bring the portfolio closer to the sector targets
-3. Maximize dividend income per {profile.currency_symbol} invested
-4. Stay within the given budget - never exceed it
-5. Assess entry timing for each recommended stock — rate as "strong_buy", "buy", "hold", or "wait"
-6. Return ONLY valid JSON, no markdown, no explanation outside the JSON
+### 2. OPTIMIZATION HIERARCHY (RaveInvestment Logic)
+When selecting stocks, prioritize in this strict order:
+1) Dividend Yield: Stock must sit within the {float(profile.yield_band_min)}%–{float(profile.yield_band_max)}% range.
+2) Income Efficiency: Maximize (annual dividend per lot / cost per lot).
+   - annual dividend per lot ≈ dividend_per_lot
+   - cost per lot ≈ cost_per_lot
+3) Sector Balancing: Prefer stocks in sectors that are currently under-represented relative to: {sector_lines}.
 
-Your tone: supportive, data-driven, direct."""
+### 3. ENTRY & MARKET SENTIMENT (Advisory Only)
+- Sale Opportunity: Flag any stock trading >{float(profile.war_fear_threshold)}% below its 52-week high as a \"Sale Opportunity\".
+- Dividend Inverse Rule: Recognize that a lower price (Sale Opportunity) mechanically increases the effective dividend yield. Prefer these \"on-sale\" stocks *when* their dividend history and fundamentals remain stable.
+- Timing Flexibility: Do NOT filter out stocks purely based on timing. If a stock is fundamentally strong, within the yield band, and improves sector balance and income efficiency, you should still include it even if timing is only \"hold\" or \"wait\".
+- Rating Scale: For each recommended stock, provide an advisory timing rating: one of [\"strong_buy\", \"buy\", \"hold\", \"wait\"], based mainly on price relative to its 52-week range and recent behavior.
+
+### 4. OUTPUT REQUIREMENTS
+1) Budget Adherence: Total cost of all recommended purchases must be less than or equal to the user’s budget.
+2) JSON Format Only: Return ONLY valid JSON. No markdown, no extra commentary outside the JSON.
+3) Fields Required per item (mapped to the JSON structure the caller expects):
+   - ticker
+   - stock_name
+   - sector
+   - lots (whole-lot count based on {profile.lot_size} shares)
+   - price
+   - cost
+   - dividend_yield
+   - dividend_per_lot (expected annual dividend per lot)
+   - reasoning (short explanation of why this stock and this lot count)
+   - entry_signal (one of: \"strong_buy\", \"buy\", \"hold\", \"wait\")
+   - entry_reasoning (short explanation of the timing assessment)
+
+Your tone: supportive, data-driven, and direct. Focus on clear, numeric justifications based on yield, dividend income per {profile.currency_symbol} invested, and sector balance. Entry timing is advisory, not a hard gate."""
 
 
 def _build_user_prompt(
@@ -130,7 +231,7 @@ Available stocks (watchlist with LATEST market prices as of right now):
 
 Generate a buy plan that allocates my {profile.currency_symbol} {amount:,.2f} across these stocks.
 Each purchase must be in whole lots of {profile.lot_size} shares.
-Prioritize bringing my sector allocation closer to targets while maximizing dividend yield.
+Prioritize bringing my sector allocation closer to targets while maximizing dividend yield and total dividend income.
 Any unallocated remainder goes to my War Chest.
 
 Respond with ONLY this JSON structure:
@@ -158,7 +259,9 @@ Entry signal must be one of: "strong_buy", "buy", "hold", "wait".
 - strong_buy: Trading significantly below fair value, excellent entry point
 - buy: Good value at current price, reasonable entry
 - hold: Fair value, not urgent to buy
-- wait: Overvalued or better entry likely soon"""
+- wait: Overvalued or better entry likely soon
+
+IMPORTANT: Entry signals are advisory for timing only. Do NOT exclude a stock that is otherwise a strong dividend candidate (within yield band and helpful for sector balance) just because the entry signal is "hold" or "wait". In those cases, still include the stock when it improves the overall dividend income and sector allocation, and explain the trade-off in the reasoning."""
 
 
 async def generate_buy_plan(
@@ -186,12 +289,11 @@ async def generate_buy_plan(
             contents=system_prompt + "\n\n" + user_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.3,
-                max_output_tokens=8192,
+                max_output_tokens=16384,
             ),
         )
         text = _extract_text(response)
-        print(f"[Plutus] Buy plan response ({len(text)} chars):")
-        print(f"[Plutus] {text[:1000]}")
+        print(f"[Plutus] Buy plan response ({len(text)} chars)")
 
         if not text:
             print("[Plutus] Empty response from Gemini, using fallback")
@@ -201,7 +303,7 @@ async def generate_buy_plan(
         return parsed
     except json.JSONDecodeError as e:
         print(f"[Plutus] JSON parse failed: {e}")
-        print(f"[Plutus] Raw text was: {text[:500] if text else '(empty)'}")
+        print(f"[Plutus] Raw text was: {text[:2000] if text else '(empty)'}")
         return _generate_fallback_plan(profile, market_data, amount)
     except Exception as e:
         print(f"[Plutus] Gemini API error: {e}")

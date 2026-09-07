@@ -28,6 +28,7 @@ class HoldingOut(BaseModel):
     pnl_pct: float | None = None
     dividend_yield: float | None = None
     annual_dividend_income: float | None = None
+    health_flags: list[str] = []
 
     model_config = {"from_attributes": True}
 

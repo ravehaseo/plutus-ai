@@ -11,6 +11,7 @@ from app.models.holding import Holding
 from app.models.profile import Profile
 from app.schemas.portfolio import HoldingCreate, HoldingUpdate, HoldingOut, PortfolioSummary
 from app.services.portfolio_service import get_holdings_with_market_data, get_portfolio_summary
+from app.services.portfolio_health import run_health_check
 
 router = APIRouter()
 
@@ -33,6 +34,13 @@ async def list_holdings(db: AsyncSession = Depends(get_db)):
 async def portfolio_summary(db: AsyncSession = Depends(get_db)):
     profile = await _active_profile(db)
     return await get_portfolio_summary(db, str(profile.id))
+
+
+@router.post("/health-check")
+async def portfolio_health_check(db: AsyncSession = Depends(get_db)):
+    profile = await _active_profile(db)
+    result = await run_health_check(db, str(profile.id))
+    return result
 
 
 @router.post("", response_model=HoldingOut)

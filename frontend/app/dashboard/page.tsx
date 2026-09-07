@@ -16,6 +16,8 @@ export default function DashboardPage() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<Record<string, { risk_level: string; summary: string }> | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -38,6 +40,28 @@ export default function DashboardPage() {
     }
     load();
   }, []);
+
+  async function handleHealthCheck() {
+    setHealthLoading(true);
+    try {
+      const res = await api.portfolio.healthCheck();
+      setHealth(res);
+    } catch (err) {
+      // best-effort: keep silent, user can re-run
+      console.error(err);
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
+  async function refetchHoldings() {
+    try {
+      const h = await api.portfolio.list();
+      setHoldings(h);
+    } catch {
+      // ignore
+    }
+  }
 
   if (loading) {
     return (
@@ -92,7 +116,19 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          <HoldingsTable holdings={holdings} currencySymbol={sym} />
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-plutus-text-primary">
+              Holdings
+            </h3>
+            <button
+              onClick={handleHealthCheck}
+              disabled={healthLoading}
+              className="rounded-md bg-plutus-surface px-3 py-1.5 text-xs text-plutus-text-secondary hover:text-plutus-text-primary disabled:opacity-50"
+            >
+              {healthLoading ? "Checking..." : "Run Health Check"}
+            </button>
+          </div>
+          <HoldingsTable holdings={holdings} currencySymbol={sym} healthMap={health || undefined} onHoldingUpdate={refetchHoldings} />
         </div>
         <div className="space-y-6">
           {saleCount > 0 && (

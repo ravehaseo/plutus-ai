@@ -46,6 +46,7 @@ export interface Holding {
   pnl_pct: number | null;
   dividend_yield: number | null;
   annual_dividend_income: number | null;
+  health_flags?: string[];
 }
 
 export interface SectorAllocation {

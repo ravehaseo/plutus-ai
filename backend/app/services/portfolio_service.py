@@ -1,5 +1,7 @@
 """Portfolio analysis: summary stats, sector balance, weighted yield."""
 
+from datetime import datetime, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,10 @@ from app.schemas.portfolio import HoldingOut, PortfolioSummary, SectorAllocation
 async def get_holdings_with_market_data(
     db: AsyncSession, profile_id: str
 ) -> list[HoldingOut]:
+    # Fetch profile so health rules can respect its yield band.
+    profile_result = await db.execute(select(Profile).where(Profile.id == profile_id))
+    profile = profile_result.scalar_one()
+
     result = await db.execute(
         select(Holding).where(Holding.profile_id == profile_id)
     )
@@ -29,7 +35,9 @@ async def get_holdings_with_market_data(
     )
     cache_map = {r.ticker: r for r in cache_result.scalars().all()}
 
-    enriched = []
+    enriched: list[HoldingOut] = []
+    # For now we only have cached dividend data; a more advanced version can use a
+    # dedicated dividend_history table. We still derive simple health flags here.
     for h in holdings:
         cache = cache_map.get(h.ticker)
         price = float(cache.last_close) if cache and cache.last_close else None
@@ -42,6 +50,17 @@ async def get_holdings_with_market_data(
         pnl = (market_value - cost_basis) if market_value and cost_basis else None
         pnl_pct = (pnl / cost_basis * 100) if pnl and cost_basis else None
         annual_income = annual_div * h.shares if annual_div else None
+
+        health_flags: list[str] = []
+        # Phase A rules (profile-aware):
+        # 1) Yield much higher than band → possible yield trap.
+        if div_yield is not None:
+            upper = float(profile.yield_band_max) + 0.03
+            lower = float(profile.yield_band_min) - 0.01
+            if div_yield > upper:
+                health_flags.append("yield_above_band")
+            elif div_yield < lower:
+                health_flags.append("yield_below_band")
 
         enriched.append(HoldingOut(
             id=h.id,
@@ -56,6 +75,7 @@ async def get_holdings_with_market_data(
             pnl_pct=round(pnl_pct, 2) if pnl_pct else None,
             dividend_yield=div_yield,
             annual_dividend_income=round(annual_income, 2) if annual_income else None,
+            health_flags=health_flags,
         ))
 
     return enriched

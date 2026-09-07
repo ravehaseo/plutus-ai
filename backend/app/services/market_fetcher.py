@@ -54,16 +54,54 @@ def _parse_json(text: str):
     return json.loads(text)
 
 
+def _last_trade_price_from_history(t: yf.Ticker, ticker: str) -> float | None:
+    """
+    Yahoo's `info` for some tickers (e.g. Bursa .KL) often lacks regularMarketPrice and
+    falls back to previousClose — stale vs the live quote. History bars usually track last trade.
+    """
+    for period, interval in (("1d", "5m"), ("2d", "15m"), ("5d", "1d")):
+        try:
+            hist = t.history(period=period, interval=interval, auto_adjust=True, prepost=False)
+            if hist is None or hist.empty or "Close" not in hist.columns:
+                continue
+            closes = hist["Close"].dropna()
+            if closes.empty:
+                continue
+            v = float(closes.iloc[-1])
+            if v > 0:
+                return v
+        except Exception as e:
+            logger.debug("yfinance history %s %s/%s: %s", ticker, period, interval, e)
+    try:
+        fi = t.fast_info
+        lp = fi["last_price"] if "last_price" in fi else getattr(fi, "last_price", None)
+        if lp is not None and float(lp) > 0:
+            return float(lp)
+    except Exception:
+        pass
+    return None
+
+
 def _fetch_ticker_sync(ticker: str) -> dict:
     """Synchronous yfinance call — meant to be run via asyncio.to_thread."""
     try:
         t = yf.Ticker(ticker)
+        last_close = _last_trade_price_from_history(t, ticker)
         info = t.info or {}
+        if last_close is None or last_close <= 0:
+            last_close = (
+                info.get("regularMarketPrice")
+                or info.get("currentPrice")
+                or info.get("postMarketPrice")
+                or info.get("previousClose")
+            )
+        if last_close is not None:
+            last_close = float(last_close)
 
         return {
             "ticker": ticker,
             "stock_name": info.get("shortName") or info.get("longName") or ticker,
-            "last_close": info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose"),
+            "last_close": last_close,
             "week_52_high": info.get("fiftyTwoWeekHigh"),
             "week_52_low": info.get("fiftyTwoWeekLow"),
             "dividend_yield": info.get("dividendYield"),
@@ -213,6 +251,79 @@ async def refresh_watchlist_cache(
             is_sale_opportunity=sale,
             entry_signal=signal_data.get("signal"),
             entry_reasoning=signal_data.get("reasoning"),
+            fetched_at=datetime.utcnow(),
+        )
+        await db.merge(row)
+        cached.append({
+            **result,
+            "sector": sector_map.get(ticker, ""),
+            "cost_per_lot": row.cost_per_lot,
+            "dividend_per_lot": row.dividend_per_lot,
+            "war_fear_discount": row.war_fear_discount,
+            "is_sale_opportunity": row.is_sale_opportunity,
+            "entry_signal": row.entry_signal,
+            "entry_reasoning": row.entry_reasoning,
+            "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
+        })
+
+    await db.commit()
+    return cached
+
+
+async def refresh_watchlist_prices_only(
+    db: AsyncSession,
+    profile_id: str,
+) -> list[dict]:
+    """Pull latest prices from yfinance; update cache. No Gemini (keeps existing entry_signal)."""
+    profile_result = await db.execute(select(Profile).where(Profile.id == profile_id))
+    profile = profile_result.scalar_one_or_none()
+    if not profile:
+        raise MarketDataError(f"Profile {profile_id} not found")
+
+    watchlist_result = await db.execute(
+        select(WatchlistItem)
+        .where(WatchlistItem.profile_id == profile_id, WatchlistItem.is_active == True)
+    )
+    watchlist = watchlist_result.scalars().all()
+    if not watchlist:
+        return []
+
+    tickers = [w.ticker for w in watchlist]
+    sector_map = {w.ticker: w.sector for w in watchlist}
+
+    cache_result = await db.execute(select(MarketCache).where(MarketCache.ticker.in_(tickers)))
+    existing_by_ticker = {r.ticker: r for r in cache_result.scalars().all()}
+
+    tasks = [fetch_ticker_data(t) for t in tickers]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    valid_results = [r for r in results if not isinstance(r, Exception) and "error" not in r]
+
+    cached = []
+    for result in valid_results:
+        ticker = result["ticker"]
+        price = result.get("last_close") or 0
+        high_52 = result.get("week_52_high") or 0
+        annual_div = result.get("annual_dividend") or 0
+        discount = calculate_discount(price, high_52)
+        sale = is_sale_opportunity(discount, float(profile.war_fear_threshold))
+        ex = existing_by_ticker.get(ticker)
+
+        row = MarketCache(
+            ticker=ticker,
+            stock_name=result.get("stock_name"),
+            last_close=price,
+            week_52_high=high_52,
+            week_52_low=result.get("week_52_low"),
+            dividend_yield=result.get("dividend_yield"),
+            annual_dividend=annual_div,
+            pe_ratio=result.get("pe_ratio"),
+            market_cap=result.get("market_cap"),
+            cost_per_lot=round(price * profile.lot_size, 2),
+            dividend_per_lot=round(annual_div * profile.lot_size, 2) if annual_div else 0,
+            war_fear_discount=round(discount, 4),
+            is_sale_opportunity=sale,
+            entry_signal=ex.entry_signal if ex else None,
+            entry_reasoning=ex.entry_reasoning if ex else None,
             fetched_at=datetime.utcnow(),
         )
         await db.merge(row)

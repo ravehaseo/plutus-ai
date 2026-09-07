@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface AmountInputProps {
   currencySymbol: string;
   onGenerate: (amount: number) => void;
   loading: boolean;
+  /** Pre-fill with this amount (e.g. war chest balance = remaining to invest). */
+  defaultAmount?: number;
 }
 
-export function AmountInput({ currencySymbol, onGenerate, loading }: AmountInputProps) {
+export function AmountInput({ currencySymbol, onGenerate, loading, defaultAmount }: AmountInputProps) {
   const [amount, setAmount] = useState("");
+  const lastDefaultRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (defaultAmount != null && defaultAmount > 0 && defaultAmount !== lastDefaultRef.current) {
+      lastDefaultRef.current = defaultAmount;
+      setAmount(String(defaultAmount));
+    }
+  }, [defaultAmount]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +32,11 @@ export function AmountInput({ currencySymbol, onGenerate, loading }: AmountInput
       <label className="block text-sm font-medium text-plutus-text-secondary mb-3">
         How much do you want to invest?
       </label>
+      {defaultAmount != null && defaultAmount > 0 && (
+        <p className="text-xs text-plutus-text-secondary mb-2">
+          Pre-filled with your current war chest (remaining to invest). Generate again to use latest prices for the rest.
+        </p>
+      )}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-plutus-gold">
@@ -33,7 +48,7 @@ export function AmountInput({ currencySymbol, onGenerate, loading }: AmountInput
             step="0.01"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="2,000.00"
+            placeholder={defaultAmount != null && defaultAmount > 0 ? undefined : "2,000.00"}
             className="w-full rounded-lg border border-plutus-border bg-plutus-bg py-3 pl-14 pr-4 font-financial text-2xl text-plutus-text-primary placeholder:text-plutus-text-secondary/40 focus:border-plutus-gold focus:outline-none focus:ring-1 focus:ring-plutus-gold"
           />
         </div>

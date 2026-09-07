@@ -1,7 +1,7 @@
 "use client";
 
 import type { BuyPlanItem } from "@/types";
-import { formatCurrency, formatYield } from "@/lib/utils";
+import { formatCurrency, formatPrice, formatYield } from "@/lib/utils";
 import { SECTOR_LABELS, ENTRY_SIGNAL_CONFIG } from "@/lib/constants";
 
 interface BuyPlanTableProps {
@@ -54,13 +54,13 @@ export function BuyPlanTable({ items, remainder, currencySymbol }: BuyPlanTableP
                   {SECTOR_LABELS[item.sector] || item.sector}
                 </td>
                 <td className="px-5 py-3 text-right font-financial text-plutus-text-primary">
-                  {formatCurrency(item.price, currencySymbol)}
+                  {formatPrice(item.price, currencySymbol)}
                 </td>
                 <td className="px-5 py-3 text-right font-financial text-plutus-gold font-bold">
                   {item.lots}
                 </td>
                 <td className="px-5 py-3 text-right font-financial text-plutus-text-primary">
-                  {formatCurrency(item.cost, currencySymbol)}
+                  {formatPrice(item.cost, currencySymbol)}
                 </td>
                 <td className="px-5 py-3 text-right font-financial text-plutus-positive">
                   {formatYield(item.dividend_yield)}

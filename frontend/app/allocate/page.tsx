@@ -66,7 +66,7 @@ export default function AllocatePage() {
     }
   }
 
-  async function handleConfirm(confirmedItems: { ticker: string; lots: number }[]) {
+  async function handleConfirm(confirmedItems: { ticker: string; lots: number; price?: number }[]) {
     if (!plan) return;
     setConfirming(true);
     setError(null);
@@ -74,6 +74,7 @@ export default function AllocatePage() {
       await api.allocate.confirm(plan.id, confirmedItems);
       setConfirmed(true);
       localStorage.removeItem(`plutus_plan_${plan.id}`);
+      api.profiles.active().then(setProfile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to confirm purchase");
     } finally {
@@ -119,11 +120,15 @@ export default function AllocatePage() {
 
       {tab === "plan" && (
         <div className="space-y-6">
-          <AmountInput
-            currencySymbol={sym}
-            onGenerate={handleGenerate}
-            loading={generating}
-          />
+<AmountInput
+                currencySymbol={sym}
+                onGenerate={handleGenerate}
+                loading={generating}
+                defaultAmount={profile?.war_chest_balance}
+              />
+          <p className="text-xs text-plutus-text-secondary -mt-2">
+            Generate Buy Plan refreshes live prices (yfinance) so plan prices match current quotes.
+          </p>
 
           {generating && (
             <div className="space-y-4">

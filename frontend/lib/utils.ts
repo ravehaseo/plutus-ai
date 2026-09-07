@@ -16,6 +16,18 @@ export function formatCurrency(
   })}`;
 }
 
+/** Use for per-share/per-lot prices (e.g. 0.875). Shows 3 decimal places. */
+export function formatPrice(
+  value: number | null | undefined,
+  symbol: string = "RM"
+): string {
+  if (value == null) return "—";
+  return `${symbol} ${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  })}`;
+}
+
 export function formatPct(value: number | null | undefined): string {
   if (value == null) return "—";
   const sign = value >= 0 ? "+" : "";

@@ -26,10 +26,27 @@ from app.schemas.allocate import (
     ProjectionRow,
 )
 from app.services.ai_advisor import generate_buy_plan
-from app.services.market_fetcher import get_cached_market_data, refresh_watchlist_cache
+from app.services.market_fetcher import get_cached_market_data, refresh_watchlist_prices_only
 from app.services.portfolio_service import get_portfolio_summary
 
 router = APIRouter()
+
+
+def _apply_market_prices_to_plan(plan: dict, market_data: list[dict]) -> None:
+    """Use yfinance last_close for each ticker; Gemini often returns rounded or stale prices."""
+    rows = [
+        (str(m["ticker"]).strip(), float(m["last_close"]))
+        for m in market_data
+        if m.get("last_close") is not None
+    ]
+    by_upper = {t.upper(): px for t, px in rows}
+    for item in plan.get("items") or []:
+        t = (item.get("ticker") or "").strip()
+        if not t:
+            continue
+        px = by_upper.get(t.upper())
+        if px is not None:
+            item["price"] = px
 
 
 async def _active_profile(db: AsyncSession) -> Profile:
@@ -45,7 +62,10 @@ async def generate_allocation(req: AllocateRequest, db: AsyncSession = Depends(g
     profile = await _active_profile(db)
     profile_id = str(profile.id)
 
-    market_data = await refresh_watchlist_cache(db, profile_id)
+    if req.refresh_market:
+        market_data = await refresh_watchlist_prices_only(db, profile_id)
+    else:
+        market_data = await get_cached_market_data(db, profile_id)
     summary = await get_portfolio_summary(db, profile_id)
 
     holdings_raw = []
@@ -76,14 +96,30 @@ async def generate_allocation(req: AllocateRequest, db: AsyncSession = Depends(g
         amount=req.amount,
         sector_balance=sector_balance,
     )
+    _apply_market_prices_to_plan(plan, market_data)
 
-    items = []
+    items: list[BuyPlanItem] = []
     total_cost = 0.0
     new_annual_div = 0.0
+    remaining_budget = float(req.amount)
+
+    # Enforce budget on the server: never exceed the requested amount.
     for item_data in plan.get("items", []):
-        lots = item_data.get("lots", 0)
-        price = item_data.get("price", 0)
-        cost = item_data.get("cost") or (lots * profile.lot_size * price)
+        raw_lots = int(item_data.get("lots", 0) or 0)
+        price = float(item_data.get("price", 0) or 0)
+        if raw_lots <= 0 or price <= 0:
+            continue
+
+        cost_per_lot = profile.lot_size * price
+        if cost_per_lot <= 0:
+            continue
+
+        max_affordable_lots = int(remaining_budget // cost_per_lot)
+        lots = min(raw_lots, max_affordable_lots)
+        if lots <= 0:
+            continue
+
+        cost = lots * cost_per_lot
         div_yield = item_data.get("dividend_yield")
         dplt = item_data.get("dividend_per_lot")
 
@@ -97,12 +133,15 @@ async def generate_allocation(req: AllocateRequest, db: AsyncSession = Depends(g
             dividend_yield=div_yield,
             dividend_per_lot=dplt,
             reasoning=item_data.get("reasoning", ""),
+            entry_signal=item_data.get("entry_signal"),
+            entry_reasoning=item_data.get("entry_reasoning"),
         ))
         total_cost += cost
+        remaining_budget -= cost
         if dplt:
             new_annual_div += dplt * lots
 
-    remainder = plan.get("remainder", round(req.amount - total_cost, 2))
+    remainder = round(float(req.amount) - total_cost, 2)
 
     ann_div_before = summary.annual_dividend
     ann_div_after = ann_div_before + new_annual_div
@@ -177,7 +216,7 @@ async def confirm_allocation(
             raise HTTPException(400, f"Ticker {ci.ticker} not in original plan")
 
         shares_to_add = ci.lots * profile.lot_size
-        price = plan_item["price"]
+        price = (ci.price if ci.price is not None else plan_item["price"])
         cost = shares_to_add * price
 
         existing_result = await db.execute(

@@ -2,18 +2,22 @@
 
 import { useState } from "react";
 import type { MarketData } from "@/types";
-import { formatCurrency, formatYield } from "@/lib/utils";
+import { formatPrice, formatYield } from "@/lib/utils";
 import { SECTOR_LABELS } from "@/lib/constants";
 import { SaleBadge } from "./sale-badge";
 import { EntrySignalBadge } from "./entry-signal-badge";
 
 type SortKey =
   | "stock_name"
+  | "ticker"
+  | "sector"
   | "last_close"
   | "dividend_yield"
+  | "week_52_high"
+  | "war_fear_discount"
   | "cost_per_lot"
   | "dividend_per_lot"
-  | "war_fear_discount";
+  | "entry_signal";
 
 interface StockTableProps {
   data: MarketData[];
@@ -33,9 +37,22 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
     }
   }
 
+  const entryOrder: Record<string, number> = {
+    strong_buy: 3,
+    buy: 2,
+    hold: 1,
+    wait: 0,
+  };
+
   const sorted = [...data].sort((a, b) => {
-    const aVal = a[sortKey] ?? 0;
-    const bVal = b[sortKey] ?? 0;
+    if (sortKey === "entry_signal") {
+      const aRank = a.entry_signal ? entryOrder[a.entry_signal] ?? -1 : -1;
+      const bRank = b.entry_signal ? entryOrder[b.entry_signal] ?? -1 : -1;
+      return sortAsc ? aRank - bRank : bRank - aRank;
+    }
+
+    const aVal = (a as any)[sortKey] ?? 0;
+    const bVal = (b as any)[sortKey] ?? 0;
 
     if (typeof aVal === "string" && typeof bVal === "string") {
       return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
@@ -75,20 +92,14 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
         <thead>
           <tr className="border-b border-plutus-border">
             <SortHeader label="Stock" field="stock_name" />
-            <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-plutus-text-secondary">
-              Sector
-            </th>
+            <SortHeader label="Sector" field="sector" />
             <SortHeader label="Price" field="last_close" align="right" />
             <SortHeader label="Yield" field="dividend_yield" align="right" />
-            <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-plutus-text-secondary">
-              52w High
-            </th>
+            <SortHeader label="52w High" field="week_52_high" align="right" />
             <SortHeader label="Discount" field="war_fear_discount" align="right" />
             <SortHeader label="Cost/Lot" field="cost_per_lot" align="right" />
             <SortHeader label="Div/Lot/Yr" field="dividend_per_lot" align="right" />
-            <th className="px-4 py-3 text-center text-xs uppercase tracking-wide text-plutus-text-secondary">
-              Entry
-            </th>
+            <SortHeader label="Entry" field="entry_signal" />
           </tr>
         </thead>
         <tbody>
@@ -109,13 +120,13 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
                 {SECTOR_LABELS[item.sector] || item.sector}
               </td>
               <td className="px-4 py-3 text-right font-financial">
-                {formatCurrency(item.last_close, currencySymbol)}
+                {formatPrice(item.last_close, currencySymbol)}
               </td>
               <td className="px-4 py-3 text-right font-financial text-plutus-gold">
                 {formatYield(item.dividend_yield)}
               </td>
               <td className="px-4 py-3 text-right font-financial text-plutus-text-secondary">
-                {formatCurrency(item.week_52_high, currencySymbol)}
+                {formatPrice(item.week_52_high, currencySymbol)}
               </td>
               <td className="px-4 py-3 text-right">
                 {item.is_sale_opportunity && item.war_fear_discount ? (
@@ -129,10 +140,10 @@ export function StockTable({ data, currencySymbol }: StockTableProps) {
                 )}
               </td>
               <td className="px-4 py-3 text-right font-financial">
-                {formatCurrency(item.cost_per_lot, currencySymbol)}
+                {formatPrice(item.cost_per_lot, currencySymbol)}
               </td>
               <td className="px-4 py-3 text-right font-financial text-plutus-positive">
-                {formatCurrency(item.dividend_per_lot, currencySymbol)}
+                {formatPrice(item.dividend_per_lot, currencySymbol)}
               </td>
               <td className="px-4 py-3 text-center">
                 <EntrySignalBadge
